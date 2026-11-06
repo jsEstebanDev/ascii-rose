@@ -5,7 +5,7 @@ Python · NumPy · pygame-ce (o directamente en la terminal).
 
 | 1. Crecimiento | 2. Capullo | 3. Floración | 4. Flor abierta con rocío |
 |---|---|---|---|
-| ![](teste/capturas/01_crecimiento.png) | ![](teste/capturas/02_capullo.png) | ![](teste/capturas/03_floracion.png) | ![](teste/capturas/04_flor_rocio.png) |
+| ![](Pyodide/teste/capturas/01_crecimiento.png) | ![](Pyodide/teste/capturas/02_capullo.png) | ![](Pyodide/teste/capturas/03_floracion.png) | ![](Pyodide/teste/capturas/04_flor_rocio.png) |
 
 ## Ejecutar
 

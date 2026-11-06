@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rosa ASCII · Python en vivo</title>
+<style>
+  :root {
+    --bg: #020204;
+    --fg: #c9cad6;
+    --muted: #7b7d90;
+    --accent: #ff6ea0;
+    --panel: #0d0d14;
+    --line: #23232f;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 16px; gap: 12px; }
+  header { width: 100%; max-width: 1000px; display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
+  h1 { font-size: 1.1rem; margin: 0; font-weight: 600; }
+  h1 span { color: var(--accent); }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  #stage { position: relative; width: 100%; max-width: 1000px; display: flex; justify-content: center; }
+  canvas { display: block; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; max-width: 100%; }
+  #overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center;
+    padding: 24px; font-size: .95rem; color: var(--muted); pointer-events: none; }
+  #overlay.hidden { display: none; }
+  #overlay.error { color: #ff8a8a; pointer-events: auto; }
+  .controls { width: 100%; max-width: 1000px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  button, select { background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 6px;
+    padding: 7px 12px; font: inherit; font-size: .85rem; cursor: pointer; }
+  button:hover, select:hover { border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: default; }
+  label { font-size: .8rem; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+  #fps { margin-left: auto; font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  footer { width: 100%; max-width: 1000px; font-size: .78rem; color: var(--muted); line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span>●</span> Rosa ASCII · Python ejecutándose en tu navegador</h1>
+  <a href="index.html">← Ver la versión en video</a>
+</header>
+
+<div id="stage">
+  <canvas id="lienzo" width="800" height="600"></canvas>
+  <div id="overlay">Preparando…</div>
+</div>
+
+<div class="controls">
+  <button id="btnPausa" disabled>Pausa</button>
+  <button id="btnReiniciar" disabled>Reiniciar</button>
+  <label>Calidad
+    <select id="selCalidad" disabled>
+      <option value="16">Rápida</option>
+      <option value="13" selected>Media</option>
+      <option value="11">Alta</option>
+    </select>
+  </label>
+  <label>Velocidad
+    <select id="selVel" disabled>
+      <option value="0.5">0,5×</option>
+      <option value="1" selected>1×</option>
+      <option value="2">2×</option>
+    </select>
+  </label>
+  <span id="fps"></span>
+</div>
+
+<footer>
+  Esta página descarga Python (Pyodide) y NumPy, y ejecuta <code>teste/rosa_ascii.py</code> en tu equipo.
+  La primera carga puede tardar unos segundos. Si va lento, baja la calidad.
+</footer>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+<script>
+(() => {
+  const PYODIDE_URL = "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/";
+  const RUTA_PY = "teste/rosa_ascii.py";      // ruta relativa a esta página
+
+  const canvas = document.getElementById("lienzo");
+  const ctx = canvas.getContext("2d");
+  const overlay = document.getElementById("overlay");
+  const btnPausa = document.getElementById("btnPausa");
+  const btnReiniciar = document.getElementById("btnReiniciar");
+  const selCalidad = document.getElementById("selCalidad");
+  const selVel = document.getElementById("selVel");
+  const fpsEl = document.getElementById("fps");
+
+  let pyodide = null, pyCrear = null, pyCuadro = null, pyHud = null;
+  let filas = 0, cols = 0, cw = 8, ch = 12, fontPx = 13, dpr = 1;
+  let t = 0, last = 0, pausado = false, velocidad = 1, fpsSuave = 0, listo = false;
+
+  function estado(msg, error = false) {
+    overlay.textContent = msg;
+    overlay.className = error ? "error" : "";
+  }
+
+  // ---------------------------------------------------------------- tamaño del lienzo
+  function configurarLienzo() {
+    fontPx = parseInt(selCalidad.value, 10);
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const fuente = `${fontPx}px ui-monospace, "DejaVu Sans Mono", Menlo, Consolas, monospace`;
+    ctx.font = fuente;
+    cw = ctx.measureText("M").width;
+    ch = Math.round(fontPx * 1.2 * 0.86 * 10) / 10 + 0.0;   // misma proporción que la ventana de pygame
+    const anchoMax = Math.min(document.getElementById("stage").clientWidth || 800, 1000);
+    const altoMax = Math.max(360, Math.min(window.innerHeight * 0.78, anchoMax * 0.95));
+    cols = Math.max(40, Math.floor(anchoMax / cw));
+    filas = Math.max(20, Math.floor(altoMax / ch));
+    const W = Math.ceil(cols * cw), H = Math.ceil(filas * ch);
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    canvas.style.width = W + "px"; canvas.style.height = H + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.font = fuente;
+    ctx.textBaseline = "top";
+    if (pyCrear) pyCrear(filas, cols, ch / cw);
+  }
+
+  // ---------------------------------------------------------------- dibujo
+  function dibujar(buf, hud) {
+    const n = filas * cols;
+    const W = cols * cw, H = filas * ch;
+    ctx.fillStyle = "#020204";
+    ctx.fillRect(0, 0, W, H);
+    let previo = "";
+    for (let i = 0; i < n; i++) {
+      const c = buf[i];
+      if (c === 32 || c === 0) continue;
+      const o = n + i * 3;
+      const color = "rgb(" + buf[o] + "," + buf[o + 1] + "," + buf[o + 2] + ")";
+      if (color !== previo) { ctx.fillStyle = color; previo = color; }
+      ctx.fillText(String.fromCharCode(c), (i % cols) * cw, Math.floor(i / cols) * ch);
+    }
+    // texto superpuesto (HUD)
+    const [a, b] = hud.split("|");
+    const hf = Math.max(11, fontPx - 2);
+    ctx.font = `${hf}px ui-monospace, "DejaVu Sans Mono", Menlo, Consolas, monospace`;
+    ctx.fillStyle = "#ff6ea0";
+    ctx.textAlign = "right";
+    ctx.fillText("● " + a, W - 12, 10);
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#60627a";
+    ctx.fillText("rosa ASCII · python · numpy · pyodide", 12, H - hf * 3.6);
+    ctx.fillText(b, 12, H - hf * 2.2);
+    ctx.font = `${fontPx}px ui-monospace, "DejaVu Sans Mono", Menlo, Consolas, monospace`;
+  }
+
+  // ---------------------------------------------------------------- un fotograma
+  function cuadro() {
+    const res = pyCuadro(t);
+    const vista = res.getBuffer("u8");
+    const datos = vista.data.slice();
+    vista.release(); res.destroy();
+    dibujar(datos, pyHud(t));
+  }
+
+  function bucle(ahora) {
+    if (!listo) return;
+    const dt = Math.min((ahora - last) / 1000, 0.5);
+    last = ahora;
+    if (!pausado) t += dt * velocidad;
+    const inicio = performance.now();
+    try { cuadro(); }
+    catch (e) { listo = false; estado("Error al dibujar: " + e.message, true); console.error(e); return; }
+    const ms = performance.now() - inicio;
+    fpsSuave = fpsSuave ? fpsSuave * 0.9 + (1000 / Math.max(ms, 1)) * 0.1 : 1000 / Math.max(ms, 1);
+    fpsEl.textContent = fpsSuave.toFixed(1) + " fps · " + cols + "×" + filas;
+    requestAnimationFrame(bucle);
+  }
+
+  // ---------------------------------------------------------------- arranque
+  async function iniciar() {
+    try {
+      estado("Cargando Python…");
+      pyodide = await loadPyodide({ indexURL: PYODIDE_URL });
+      estado("Cargando NumPy…");
+      await pyodide.loadPackage("numpy");
+      estado("Cargando la rosa…");
+      const r = await fetch(RUTA_PY, { cache: "no-cache" });
+      if (!r.ok) throw new Error("No se encontró " + RUTA_PY + " (HTTP " + r.status + ")");
+      pyodide.FS.writeFile("/home/pyodide/rosa_ascii.py", await r.text());
+      pyodide.runPython(`
+import sys
+if "/home/pyodide" not in sys.path:
+    sys.path.insert(0, "/home/pyodide")
+import rosa_ascii as ra
+
+ren = None
+
+def crear(filas, cols, aspecto):
+    global ren
+    ren = ra.Renderizador(int(filas), int(cols), aspecto=float(aspecto))
+
+def cuadro(t):
+    chars, colores, letras = ren.fotograma(float(t))
+    return chars.tobytes() + colores.tobytes()
+
+def hud(t):
+    a, b = ra.textos_hud(float(t))
+    return a + "|" + b
+`);
+      pyCrear = pyodide.globals.get("crear");
+      pyCuadro = pyodide.globals.get("cuadro");
+      pyHud = pyodide.globals.get("hud");
+      configurarLienzo();
+      overlay.className = "hidden";
+      [btnPausa, btnReiniciar, selCalidad, selVel].forEach(el => el.disabled = false);
+      listo = true;
+      last = performance.now();
+      requestAnimationFrame(bucle);
+    } catch (e) {
+      console.error(e);
+      let msg = "No se pudo iniciar: " + e.message;
+      if (location.protocol === "file:") {
+        msg += "\n\nAbre la página desde un servidor (por ejemplo `python -m http.server`) o desde GitHub Pages; " +
+               "los navegadores bloquean fetch() con file://.";
+      }
+      estado(msg, true);
+      overlay.style.whiteSpace = "pre-line";
+    }
+  }
+
+  // ---------------------------------------------------------------- controles
+  btnPausa.addEventListener("click", () => {
+    pausado = !pausado;
+    btnPausa.textContent = pausado ? "Reanudar" : "Pausa";
+  });
+  btnReiniciar.addEventListener("click", () => { t = 0; });
+  selVel.addEventListener("change", () => { velocidad = parseFloat(selVel.value); });
+  selCalidad.addEventListener("change", () => { if (listo) configurarLienzo(); });
+  let temporizador;
+  window.addEventListener("resize", () => {
+    clearTimeout(temporizador);
+    temporizador = setTimeout(() => { if (listo) configurarLienzo(); }, 250);
+  });
+
+  iniciar();
+})();
+</script>
+</body>
+</html>

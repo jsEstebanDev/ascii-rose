@@ -1,11 +1,5 @@
-<h2>Animación Python</h2>
-
-<pre><code id="python-code"></code></pre>
-
-<script>
-fetch('./teste/rosa_ascii.py')
-  .then(response => response.text())
-  .then(code => {
-    document.getElementById('python-code').textContent = code;
-  });
-</script>
+<!-- Pega esto dentro del <body> de tu index.html -->
+<video src="rosa.mp4" autoplay loop muted playsinline controls
+       style="display:block; max-width:100%; height:auto; margin:0 auto; background:#020204;">
+  Tu navegador no soporta video.
+</video>
