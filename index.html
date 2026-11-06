@@ -1,5 +1,39 @@
-<!-- Pega esto dentro del <body> de tu index.html -->
-<video src="Pyodide/rosa.mp4" autoplay loop muted playsinline controls
-       style="display:block; max-width:100%; height:auto; margin:0 auto; background:#020204;">
-  Tu navegador no soporta video.
-</video>
+<html>
+
+<head>
+  <title>ascii-rose | animate atiok</title>
+  <style>
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      background: #000;
+      color: #c9cad6;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+    }
+
+    video {
+      max-width: 100%;
+      height: auto;
+    }
+  </style>
+</head>
+
+<body>
+  <video src="Pyodide/rosa.mp4" autoplay loop muted playsinline controls
+    style="display:block; max-width:100%; height:auto; margin:0 auto; background:#020204;">
+    Tu navegador no soporta video.
+  </video>
+
+  <a href="python.html">Ver la animación completa con Python en vivo →</a>
+
+</body>
+
+</html>
