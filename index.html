@@ -1,0 +1,11 @@
+<h2>Animación Python</h2>
+
+<pre><code id="python-code"></code></pre>
+
+<script>
+fetch('./teste/rosa_ascii.py')
+  .then(response => response.text())
+  .then(code => {
+    document.getElementById('python-code').textContent = code;
+  });
+</script>
